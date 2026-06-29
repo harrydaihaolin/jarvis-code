@@ -2,6 +2,10 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import asyncio
+from pathlib import Path
+from unittest.mock import AsyncMock, patch, MagicMock
+
 from jarvis.history import History
 from evals.run import _turn_count
 
@@ -48,20 +52,8 @@ def test_turn_count_ignores_plain_user_messages():
     assert _turn_count(h) == 0
 
 
-import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
-from pathlib import Path
-import tempfile
-
-
 async def _fake_run_turn_slow(history, config):
     await asyncio.sleep(9999)
-
-
-async def _fake_run_turn_writes(history, config):
-    """Simulates run_turn writing a file via the tracked executor."""
-    writer = tools.EXECUTORS["write_file"]
-    await writer(path="jarvis/skills/remind.py", content="# remind skill\n")
 
 
 def _make_fake_item(prompt):

@@ -181,7 +181,7 @@ async def main() -> None:
 
         files_written: list[str] = []
         original_commands = COMMANDS_PATH.read_text()
-        original_write = tools.EXECUTORS.get("write_file")
+        original_write = tools.EXECUTORS["write_file"]
 
         async def tracking_write(**kw):
             files_written.append(kw.get("path", ""))
