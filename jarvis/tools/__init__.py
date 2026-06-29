@@ -1,9 +1,11 @@
 from . import bash, read, write
+from typing import Callable
 
-ALL = [read.DEFINITION, write.DEFINITION, bash.DEFINITION]
+_TOOLS: list[tuple[dict, Callable]] = [
+    (read.DEFINITION, read.execute),
+    (write.DEFINITION, write.execute),
+    (bash.DEFINITION, bash.execute),
+]
 
-EXECUTORS: dict = {
-    "read_file": read.execute,
-    "write_file": write.execute,
-    "bash": bash.execute,
-}
+ALL: list[dict] = [defn for defn, _ in _TOOLS]
+EXECUTORS: dict[str, Callable] = {defn["name"]: fn for defn, fn in _TOOLS}

@@ -9,7 +9,7 @@ async def test_main_routes_slash_command(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     call_count = 0
 
-    async def fake_executor(_, fn):
+    async def fake_executor(_, _fn):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -33,7 +33,7 @@ async def test_main_sends_user_message_to_query(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     call_count = 0
 
-    async def fake_run_in_executor(_, fn):
+    async def fake_run_in_executor(_, _fn):
         nonlocal call_count
         call_count += 1
         if call_count == 1:

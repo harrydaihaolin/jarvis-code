@@ -1,4 +1,3 @@
-import os
 import pytest
 from jarvis.config import load_config, Config
 

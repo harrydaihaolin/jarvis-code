@@ -31,10 +31,15 @@ async def run_turn(history: History, config: Config) -> None:
                 continue
             executor = tools.EXECUTORS.get(block.name)
             print(f"\n[{block.name}] running...", flush=True)
-            if executor:
-                result = await executor(**block.input)
-            else:
-                result = f"Error: unknown tool '{block.name}'"
+            try:
+                if executor:
+                    result = await executor(**block.input)
+                else:
+                    result = f"Error: unknown tool '{block.name}'"
+            except Exception as e:
+                result = f"Error running {block.name}: {e}"
             tool_results.append({"tool_use_id": block.id, "content": result})
 
+        if not tool_results:
+            break
         history.append_tool_results(tool_results)
