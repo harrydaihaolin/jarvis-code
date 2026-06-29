@@ -45,7 +45,11 @@ async def _read_line(prompt: str) -> str:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Jarvis Code — AI coding assistant")
+    parser = argparse.ArgumentParser(
+        description="Jarvis Code — AI coding assistant",
+        epilog="subcommands:\n  upgrade    upgrade Jarvis to the latest version",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--model", default="claude-sonnet-4-6", help="Claude model ID")
     args, _ = parser.parse_known_args()  # parse_args() would sys.exit(2) when pytest injects its own args
 
@@ -99,6 +103,13 @@ async def main() -> None:
 
 
 def run() -> None:
+    # Dispatch the `upgrade` subcommand before argparse so the REPL parser
+    # (which only knows --model) stays unchanged.
+    if sys.argv[1:2] == ["upgrade"]:
+        from .upgrade import upgrade
+
+        raise SystemExit(upgrade())
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
