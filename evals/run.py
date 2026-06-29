@@ -159,6 +159,61 @@ async def main() -> None:
 
     _print_results("sanity", result)
 
+    # ── build-skill experiment ─────────────────────────────────────────────────
+    try:
+        lf.create_dataset(name=BUILD_DATASET, description="Jarvis Code build-skill evals")
+    except Exception:
+        pass
+
+    lf.create_dataset_item(
+        dataset_name=BUILD_DATASET,
+        input={"prompt": BUILD_PROMPT},
+        expected_output={"file": "jarvis/skills/remind.py", "max_turns": 25},
+        id="build-skill-v1",
+    )
+
+    build_ds = lf.get_dataset(BUILD_DATASET)
+    print(f"\nDataset: {BUILD_DATASET} ({len(build_ds.items)} items)")
+
+    async def build_skill_task(*, item, **kwargs):
+        history = History()
+        history.append_user(item.input["prompt"])
+
+        files_written: list[str] = []
+        original_commands = COMMANDS_PATH.read_text()
+        original_write = tools.EXECUTORS.get("write_file")
+
+        async def tracking_write(**kw):
+            files_written.append(kw.get("path", ""))
+            return await original_write(**kw)
+
+        timed_out = False
+        elapsed = 0.0
+        start = time.monotonic()
+        print(f"[running] {item.input['prompt']!r}")
+
+        try:
+            with patch.dict(tools.EXECUTORS, {"write_file": tracking_write}):
+                await asyncio.wait_for(run_turn(history, config), timeout=BUILD_TIMEOUT)
+        except asyncio.TimeoutError:
+            timed_out = True
+        finally:
+            elapsed = time.monotonic() - start
+            COMMANDS_PATH.write_text(original_commands)
+            for p in files_written:
+                fp = Path(os.path.abspath(p))
+                if fp.exists() and str(fp).startswith(str(SKILLS_DIR)):
+                    fp.unlink()
+
+        return {
+            "text": _final_text(history),
+            "tool_calls": _tool_calls(history),
+            "turn_count": _turn_count(history),
+            "elapsed": elapsed,
+            "timed_out": timed_out,
+            "files_written": files_written,
+        }
+
 
 if __name__ == "__main__":
     asyncio.run(main())
