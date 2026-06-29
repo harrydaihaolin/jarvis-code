@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Jarvis Code eval loop — sanity check via Langfuse self-hosted."""
+
+import asyncio
+import os
+import time
+
+from langfuse import Langfuse
+
+from jarvis.config import load_config
+from jarvis.history import History
+from jarvis.query import run_turn
+
+LANGFUSE_HOST = "http://localhost:3000"
+DATASET_NAME = "jarvis-sanity"
+EVAL_FILE = "/tmp/jarvis_eval.txt"
+EVAL_CONTENT = "jarvis-eval-42"
+PROMPT = f"Read {EVAL_FILE} and tell me what's in it"
+
+
+def _tool_calls(history: History) -> list[str]:
+    names = []
+    for msg in history.messages:
+        if msg["role"] == "assistant":
+            for block in msg["content"]:
+                if block.get("type") == "tool_use":
+                    names.append(block["name"])
+    return names
+
+
+def _final_text(history: History) -> str:
+    for msg in reversed(history.messages):
+        if msg["role"] == "assistant":
+            for block in msg["content"]:
+                if block.get("type") == "text":
+                    return block["text"]
+    return ""
+
+
+async def main() -> None:
+    lf = Langfuse(
+        public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
+        secret_key=os.environ["LANGFUSE_SECRET_KEY"],
+        host=LANGFUSE_HOST,
+    )
+    config = load_config()
+
+    print("=== Jarvis Code Eval ===")
+
+    # Upsert dataset (create is idempotent if name already exists)
+    try:
+        lf.create_dataset(name=DATASET_NAME, description="Jarvis Code sanity checks")
+    except Exception:
+        pass
+
+    # Upsert item — stable id prevents duplicates across runs
+    lf.create_dataset_item(
+        dataset_name=DATASET_NAME,
+        input={"prompt": PROMPT},
+        expected_output={"contains": EVAL_CONTENT},
+        id="read-file-sanity-v1",
+    )
+
+    dataset = lf.get_dataset(DATASET_NAME)
+    print(f"Dataset: {DATASET_NAME} ({len(dataset.items)} items)\n")
+
+    async def task(*, item, **kwargs):
+        with open(EVAL_FILE, "w") as f:
+            f.write(EVAL_CONTENT)
+
+        history = History()
+        history.append_user(item.input["prompt"])
+
+        start = time.monotonic()
+        print(f"[running] {item.input['prompt']!r}")
+        await run_turn(history, config)
+        elapsed = time.monotonic() - start
+
+        return {
+            "text": _final_text(history),
+            "tool_calls": _tool_calls(history),
+            "elapsed": elapsed,
+        }
+
+    def eval_tool_called(*, input, output, expected_output=None, **kwargs):
+        called = "read_file" in output["tool_calls"]
+        return {
+            "name": "tool_called",
+            "value": 1.0 if called else 0.0,
+            "comment": f"read_file {'called' if called else 'NOT called'} (saw: {output['tool_calls']})",
+        }
+
+    def eval_content_present(*, input, output, expected_output=None, **kwargs):
+        target = (expected_output or {}).get("contains", EVAL_CONTENT)
+        present = target in output["text"]
+        return {
+            "name": "content_present",
+            "value": 1.0 if present else 0.0,
+            "comment": f"'{target}' {'found' if present else 'NOT found'} in response",
+        }
+
+    result = lf.run_experiment(
+        name="jarvis-sanity",
+        data=dataset.items,
+        task=task,
+        evaluators=[eval_tool_called, eval_content_present],
+        max_concurrency=1,
+        metadata={"model": config.model},
+    )
+
+    lf.flush()
+
+    print("\n--- Results ---")
+    passed_count = 0
+    for item_result in result.item_results:
+        passed = all(ev.value == 1.0 for ev in item_result.evaluations)
+        elapsed = item_result.output.get("elapsed", 0) if item_result.output else 0
+        for ev in item_result.evaluations:
+            icon = "✓" if ev.value == 1.0 else "✗"
+            print(f"  {icon} {ev.name}: {ev.comment}")
+        print(f"  {'PASS' if passed else 'FAIL'}  ({elapsed:.1f}s)")
+        if passed:
+            passed_count += 1
+
+    total = len(result.item_results)
+    print(f"\n{passed_count}/{total} passed")
+
+    if result.dataset_run_url:
+        print(f"View: {result.dataset_run_url}")
+    else:
+        print(f"View: {LANGFUSE_HOST}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
