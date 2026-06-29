@@ -185,8 +185,6 @@ async def main() -> None:
         metadata={"model": config.model},
     )
 
-    lf.flush()
-
     _print_results("sanity", result)
 
     # ── build-skill experiment ─────────────────────────────────────────────────
@@ -243,6 +241,18 @@ async def main() -> None:
             "timed_out": timed_out,
             "files_written": files_written,
         }
+
+    build_result = lf.run_experiment(
+        name="jarvis-build-skill",
+        data=build_ds.items,
+        task=build_skill_task,
+        evaluators=[eval_completed_in_time, eval_turns_reasonable, eval_file_created],
+        max_concurrency=1,
+        metadata={"model": config.model},
+    )
+    _print_results("build-skill", build_result)
+
+    lf.flush()
 
 
 if __name__ == "__main__":
