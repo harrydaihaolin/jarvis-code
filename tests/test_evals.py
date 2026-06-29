@@ -158,3 +158,114 @@ def test_build_skill_task_cleanup_deletes_written_skill_files(tmp_path):
         # The file must have been deleted
         assert not (skills_dir / "remind.py").exists()
         assert skill_path in result["files_written"]
+
+
+from langfuse.experiment import Evaluation
+
+
+def _build_output(timed_out=False, turn_count=5, tool_calls=None, files_written=None, elapsed=10.0):
+    return {
+        "text": "done",
+        "tool_calls": tool_calls or ["read_file", "write_file"],
+        "turn_count": turn_count,
+        "elapsed": elapsed,
+        "timed_out": timed_out,
+        "files_written": files_written or [],
+    }
+
+
+# ── eval_completed_in_time ────────────────────────────────────────────────────
+
+def test_eval_completed_in_time_pass():
+    from evals.run import eval_completed_in_time
+    ev = eval_completed_in_time(output=_build_output(timed_out=False))
+    assert ev.value == 1.0
+    assert "completed" in ev.comment
+
+
+def test_eval_completed_in_time_fail():
+    from evals.run import eval_completed_in_time
+    ev = eval_completed_in_time(output=_build_output(timed_out=True))
+    assert ev.value == 0.0
+    assert "TIMED OUT" in ev.comment
+
+
+# ── eval_turns_reasonable ─────────────────────────────────────────────────────
+
+def test_eval_turns_reasonable_pass():
+    from evals.run import eval_turns_reasonable
+    ev = eval_turns_reasonable(
+        output=_build_output(turn_count=10),
+        expected_output={"max_turns": 25},
+    )
+    assert ev.value == 1.0
+    assert "10 turns" in ev.comment
+
+
+def test_eval_turns_reasonable_fail_over_budget():
+    from evals.run import eval_turns_reasonable
+    ev = eval_turns_reasonable(
+        output=_build_output(turn_count=30),
+        expected_output={"max_turns": 25},
+    )
+    assert ev.value == 0.0
+    assert "exceeded" in ev.comment
+
+
+def test_eval_turns_reasonable_fail_on_timeout():
+    from evals.run import eval_turns_reasonable
+    # Even with low turn count, timed_out=True must fail this evaluator
+    ev = eval_turns_reasonable(
+        output=_build_output(timed_out=True, turn_count=3),
+        expected_output={"max_turns": 25},
+    )
+    assert ev.value == 0.0
+
+
+def test_eval_turns_reasonable_comment_includes_tool_calls():
+    from evals.run import eval_turns_reasonable
+    ev = eval_turns_reasonable(
+        output=_build_output(turn_count=5, tool_calls=["read_file", "bash", "write_file"]),
+        expected_output={"max_turns": 25},
+    )
+    assert "read_file" in ev.comment
+
+
+# ── eval_file_created ─────────────────────────────────────────────────────────
+
+def test_eval_file_created_pass():
+    from evals.run import eval_file_created
+    ev = eval_file_created(
+        output=_build_output(files_written=["jarvis/skills/remind.py"]),
+        expected_output={"file": "jarvis/skills/remind.py"},
+    )
+    assert ev.value == 1.0
+    assert "wrote" in ev.comment
+
+
+def test_eval_file_created_pass_absolute_path():
+    from evals.run import eval_file_created
+    ev = eval_file_created(
+        output=_build_output(files_written=["/Users/x/jarvis-code/jarvis/skills/remind.py"]),
+        expected_output={"file": "jarvis/skills/remind.py"},
+    )
+    assert ev.value == 1.0
+
+
+def test_eval_file_created_fail_empty():
+    from evals.run import eval_file_created
+    ev = eval_file_created(
+        output=_build_output(files_written=[]),
+        expected_output={"file": "jarvis/skills/remind.py"},
+    )
+    assert ev.value == 0.0
+    assert "did NOT write" in ev.comment
+
+
+def test_eval_file_created_fail_wrong_file():
+    from evals.run import eval_file_created
+    ev = eval_file_created(
+        output=_build_output(files_written=["jarvis/skills/other.py"]),
+        expected_output={"file": "jarvis/skills/remind.py"},
+    )
+    assert ev.value == 0.0

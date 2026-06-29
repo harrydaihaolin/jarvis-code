@@ -84,6 +84,36 @@ def _print_results(label: str, result) -> None:
         print(f"View: {LANGFUSE_HOST}")
 
 
+def eval_completed_in_time(*, output, **kwargs):
+    ok = not output["timed_out"]
+    return Evaluation(
+        name="completed_in_time",
+        value=1.0 if ok else 0.0,
+        comment=f"{'completed' if ok else f'TIMED OUT after {BUILD_TIMEOUT}s'} ({output['elapsed']:.1f}s)",
+    )
+
+
+def eval_turns_reasonable(*, output, expected_output=None, **kwargs):
+    max_t = (expected_output or {}).get("max_turns", 25)
+    n = output["turn_count"]
+    ok = not output["timed_out"] and n <= max_t
+    return Evaluation(
+        name="turns_reasonable",
+        value=1.0 if ok else 0.0,
+        comment=f"{n} turns ({'ok' if ok else f'exceeded {max_t}'}), tools: {output['tool_calls']}",
+    )
+
+
+def eval_file_created(*, output, expected_output=None, **kwargs):
+    target = (expected_output or {}).get("file", "jarvis/skills/remind.py")
+    created = any(target in f for f in output["files_written"])
+    return Evaluation(
+        name="file_created",
+        value=1.0 if created else 0.0,
+        comment=f"{'wrote' if created else 'did NOT write'} {target} (wrote: {output['files_written']})",
+    )
+
+
 async def main() -> None:
     lf = Langfuse(
         public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
