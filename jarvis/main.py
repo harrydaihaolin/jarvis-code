@@ -9,7 +9,7 @@ from .history import History
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Jarvis Code — AI coding assistant")
     parser.add_argument("--model", default="claude-sonnet-4-6", help="Claude model ID")
-    args, _ = parser.parse_known_args()
+    args, _ = parser.parse_known_args()  # parse_args() would sys.exit(2) when pytest injects its own args
 
     config = load_config(model=args.model)
     history = History()
