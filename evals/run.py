@@ -4,11 +4,14 @@
 import asyncio
 import os
 import time
+from pathlib import Path
+from unittest.mock import patch
 
 from langfuse import Langfuse
 from langfuse.experiment import Evaluation
 
 from jarvis.config import load_config
+from jarvis import tools
 from jarvis.history import History
 from jarvis.query import run_turn
 
@@ -17,6 +20,17 @@ DATASET_NAME = "jarvis-sanity"
 EVAL_FILE = "/tmp/jarvis_eval.txt"
 EVAL_CONTENT = "jarvis-eval-42"
 PROMPT = f"Read {EVAL_FILE} and tell me what's in it"
+
+# ── build-skill eval constants ────────────────────────────────────────────────
+BUILD_DATASET = "jarvis-build-skill"
+BUILD_TIMEOUT = 120
+_REPO_ROOT = Path(__file__).parent.parent
+COMMANDS_PATH = _REPO_ROOT / "jarvis" / "commands.py"
+SKILLS_DIR = (_REPO_ROOT / "jarvis" / "skills").resolve()
+BUILD_PROMPT = (
+    "Build a new skill called /remind, structured exactly like /btw. "
+    "Create jarvis/skills/remind.py and register /remind in jarvis/commands.py."
+)
 
 
 def _tool_calls(history: History) -> list[str]:
@@ -47,6 +61,27 @@ def _turn_count(history: History) -> int:
         and isinstance(msg["content"], list)
         and any(b.get("type") == "tool_result" for b in msg["content"])
     )
+
+
+def _print_results(label: str, result) -> None:
+    print(f"\n--- {label} results ---")
+    passed_count = 0
+    for item_result in result.item_results:
+        evals = item_result.evaluations or []
+        passed = all(ev.value == 1.0 for ev in evals)
+        elapsed = item_result.output.get("elapsed", 0) if item_result.output else 0
+        for ev in evals:
+            icon = "✓" if ev.value == 1.0 else "✗"
+            print(f"  {icon} {ev.name}: {ev.comment}")
+        print(f"  {'PASS' if passed else 'FAIL'}  ({elapsed:.1f}s)")
+        if passed:
+            passed_count += 1
+    total = len(result.item_results)
+    print(f"\n{passed_count}/{total} passed")
+    if result.dataset_run_url:
+        print(f"View: {result.dataset_run_url}")
+    else:
+        print(f"View: {LANGFUSE_HOST}")
 
 
 async def main() -> None:
@@ -122,26 +157,7 @@ async def main() -> None:
 
     lf.flush()
 
-    print("\n--- Results ---")
-    passed_count = 0
-    for item_result in result.item_results:
-        evals = item_result.evaluations or []
-        passed = all(ev.value == 1.0 for ev in evals)
-        elapsed = item_result.output.get("elapsed", 0) if item_result.output else 0
-        for ev in evals:
-            icon = "✓" if ev.value == 1.0 else "✗"
-            print(f"  {icon} {ev.name}: {ev.comment}")
-        print(f"  {'PASS' if passed else 'FAIL'}  ({elapsed:.1f}s)")
-        if passed:
-            passed_count += 1
-
-    total = len(result.item_results)
-    print(f"\n{passed_count}/{total} passed")
-
-    if result.dataset_run_url:
-        print(f"View: {result.dataset_run_url}")
-    else:
-        print(f"View: {LANGFUSE_HOST}")
+    _print_results("sanity", result)
 
 
 if __name__ == "__main__":
