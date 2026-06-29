@@ -38,6 +38,17 @@ def _final_text(history: History) -> str:
     return ""
 
 
+def _turn_count(history: History) -> int:
+    """Count completed tool-use cycles (user messages that contain tool_result blocks)."""
+    return sum(
+        1
+        for msg in history.messages
+        if msg["role"] == "user"
+        and isinstance(msg["content"], list)
+        and any(b.get("type") == "tool_result" for b in msg["content"])
+    )
+
+
 async def main() -> None:
     lf = Langfuse(
         public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
