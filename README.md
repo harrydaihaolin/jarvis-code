@@ -2,19 +2,24 @@
 
 Personal AI coding assistant CLI powered by Claude.
 
-## Setup
+## Install
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --extra dev
 export ANTHROPIC_API_KEY=your_key_here
+```
+
+## Test
+
+```bash
+uv run pytest
 ```
 
 ## Run
 
 ```bash
-jarvis
-jarvis --model claude-haiku-4-5-20251001
+uv run jarvis
+uv run jarvis --model claude-haiku-4-5-20251001
 ```
 
 ## Commands

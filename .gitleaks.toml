@@ -1,0 +1,16 @@
+# gitleaks configuration: tunes which paths and rules are scanned for
+# secrets in pre-commit hooks and CI.
+title = "jarvis-code gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlist.regexes]]
+description = "Allow .env.example placeholder values"
+regex = '''your_key_here'''
+
+[allowlist]
+paths = [
+  '''uv\.lock''',
+  '''\.venv/''',
+]
