@@ -86,7 +86,7 @@ async def main() -> None:
         if not user_input:
             continue
 
-        if handle(user_input, history):
+        if handle(user_input, history, config):   # config forwarded for /btw
             continue
 
         history.append_user(user_input)
