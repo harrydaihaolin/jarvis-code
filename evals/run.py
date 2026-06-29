@@ -6,12 +6,13 @@ import os
 import time
 
 from langfuse import Langfuse
+from langfuse.experiment import Evaluation
 
 from jarvis.config import load_config
 from jarvis.history import History
 from jarvis.query import run_turn
 
-LANGFUSE_HOST = "http://localhost:3000"
+LANGFUSE_HOST = os.environ.get("LANGFUSE_BASE_URL", "http://localhost:3000")
 DATASET_NAME = "jarvis-sanity"
 EVAL_FILE = "/tmp/jarvis_eval.txt"
 EVAL_CONTENT = "jarvis-eval-42"
@@ -84,20 +85,20 @@ async def main() -> None:
 
     def eval_tool_called(*, input, output, expected_output=None, **kwargs):
         called = "read_file" in output["tool_calls"]
-        return {
-            "name": "tool_called",
-            "value": 1.0 if called else 0.0,
-            "comment": f"read_file {'called' if called else 'NOT called'} (saw: {output['tool_calls']})",
-        }
+        return Evaluation(
+            name="tool_called",
+            value=1.0 if called else 0.0,
+            comment=f"read_file {'called' if called else 'NOT called'} (saw: {output['tool_calls']})",
+        )
 
     def eval_content_present(*, input, output, expected_output=None, **kwargs):
         target = (expected_output or {}).get("contains", EVAL_CONTENT)
         present = target in output["text"]
-        return {
-            "name": "content_present",
-            "value": 1.0 if present else 0.0,
-            "comment": f"'{target}' {'found' if present else 'NOT found'} in response",
-        }
+        return Evaluation(
+            name="content_present",
+            value=1.0 if present else 0.0,
+            comment=f"'{target}' {'found' if present else 'NOT found'} in response",
+        )
 
     result = lf.run_experiment(
         name="jarvis-sanity",
@@ -113,9 +114,10 @@ async def main() -> None:
     print("\n--- Results ---")
     passed_count = 0
     for item_result in result.item_results:
-        passed = all(ev.value == 1.0 for ev in item_result.evaluations)
+        evals = item_result.evaluations or []
+        passed = all(ev.value == 1.0 for ev in evals)
         elapsed = item_result.output.get("elapsed", 0) if item_result.output else 0
-        for ev in item_result.evaluations:
+        for ev in evals:
             icon = "✓" if ev.value == 1.0 else "✗"
             print(f"  {icon} {ev.name}: {ev.comment}")
         print(f"  {'PASS' if passed else 'FAIL'}  ({elapsed:.1f}s)")
