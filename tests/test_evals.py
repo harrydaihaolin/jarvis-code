@@ -9,12 +9,6 @@ from evals.run import _turn_count
 def _make_tool_result_msg():
     return {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "x", "content": "ok"}]}
 
-def _make_user_msg(text="hi"):
-    return {"role": "user", "content": text}
-
-def _make_assistant_msg(text="hello"):
-    return {"role": "assistant", "content": [{"type": "text", "text": text}]}
-
 
 def test_turn_count_zero_no_tool_results():
     h = History()
