@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 from jarvis.history import History
 from evals.run import _turn_count
@@ -85,7 +85,7 @@ def test_build_skill_task_sets_timed_out_on_timeout(tmp_path):
             history.append_user(item.input["prompt"])
             files_written = []
             original_commands = fake_commands.read_text()
-            original_write = er.tools.EXECUTORS.get("write_file")
+            original_write = er.tools.EXECUTORS["write_file"]
             async def tracking_write(**kw):
                 files_written.append(kw.get("path", ""))
                 return await original_write(**kw)
@@ -134,7 +134,7 @@ def test_build_skill_task_cleanup_deletes_written_skill_files(tmp_path):
             history.append_user("build")
             files_written = []
             original_commands = fake_commands.read_text()
-            original_write = er.tools.EXECUTORS.get("write_file")
+            original_write = er.tools.EXECUTORS["write_file"]
             async def tracking_write(**kw):
                 files_written.append(kw.get("path", ""))
                 return await original_write(**kw)
